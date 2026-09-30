@@ -1,0 +1,104 @@
+@page "/todo"
+@using System.Text.Json
+@using BlazorAppWASM.Models
+@using Microsoft.AspNetCore.Components.Web
+@inject IJSRuntime JS
+
+<PageTitle>To Do</PageTitle>
+
+<h1>To Do</h1>
+
+<div class="mb-3">
+    <input @bind="newTitle" @bind:event="oninput" class="form-control" placeholder="New to-do title" @onkeyup="HandleKeyUp" />
+    <div class="mt-2">
+        <button class="btn btn-primary" @onclick="AddTodo" disabled="@string.IsNullOrWhiteSpace(newTitle)">Add</button>
+    </div>
+</div>
+
+<ul class="list-group">
+    @foreach (var item in todos)
+    {
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <input type="checkbox" class="form-check-input me-2" checked="@item.IsDone" @onchange="@(() => Toggle(item))" />
+                <span class="@GetTitleClass(item)">@item.Title</span>
+            </div>
+            <div>
+                <button class="btn btn-sm btn-danger" @onclick="@(() => Delete(item.Id))">Delete</button>
+            </div>
+        </li>
+    }
+</ul>
+
+@code {
+    private List<TodoItem> todos = new();
+    private string newTitle = string.Empty;
+    private IJSObjectReference? module;
+    private const string storageKey = "blazor_todos_v1";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/todoLocalStorage.js");
+            await LoadTodosAsync();
+        }
+    }
+
+    private async Task LoadTodosAsync()
+    {
+        try
+        {
+            var json = await module!.InvokeAsync<string>("getTodos", storageKey);
+            todos = JsonSerializer.Deserialize<List<TodoItem>>(json) ?? new();
+            StateHasChanged();
+        }
+        catch
+        {
+            todos = new();
+        }
+    }
+
+    private async Task SaveTodosAsync()
+    {
+        if (module is null) return;
+        var json = JsonSerializer.Serialize(todos);
+        await module.InvokeVoidAsync("setTodos", storageKey, json);
+    }
+
+    private async Task AddTodo()
+    {
+        var title = newTitle?.Trim();
+        if (string.IsNullOrEmpty(title)) return;
+        todos.Insert(0, new TodoItem(Guid.NewGuid(), title, false));
+        newTitle = string.Empty;
+        await SaveTodosAsync();
+    }
+
+    private async Task Toggle(TodoItem item)
+    {
+        var idx = todos.FindIndex(t => t.Id == item.Id);
+        if (idx >= 0)
+        {
+            todos[idx] = todos[idx] with { IsDone = !todos[idx].IsDone };
+            await SaveTodosAsync();
+        }
+    }
+
+    private async Task Delete(Guid id)
+    {
+        var idx = todos.FindIndex(t => t.Id == id);
+        if (idx >= 0)
+        {
+            todos.RemoveAt(idx);
+            await SaveTodosAsync();
+        }
+    }
+
+    private string GetTitleClass(TodoItem item) => item.IsDone ? "text-decoration-line-through" : string.Empty;
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddTodo();
+    }
+}
