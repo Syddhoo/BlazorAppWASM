@@ -10,6 +10,7 @@
 
 <div class="mb-3">
     <input @bind="newTitle" @bind:event="oninput" class="form-control" placeholder="New to-do title" @onkeyup="HandleKeyUp" />
+    <textarea @bind="newDescription" @bind:event="oninput" class="form-control mt-2" rows="3" placeholder="Optional description"></textarea>
     <div class="mt-2">
         <button class="btn btn-primary" @onclick="AddTodo" disabled="@string.IsNullOrWhiteSpace(newTitle)">Add</button>
     </div>
@@ -19,13 +20,34 @@
     @foreach (var item in todos)
     {
         <li class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-                <input type="checkbox" class="form-check-input me-2" checked="@item.IsDone" @onchange="@(() => Toggle(item))" />
-                <span class="@GetTitleClass(item)">@item.Title</span>
-            </div>
-            <div>
-                <button class="btn btn-sm btn-danger" @onclick="@(() => Delete(item.Id))">Delete</button>
-            </div>
+            @if (editingTodoId == item.Id)
+            {
+                <div class="flex-grow-1 me-3">
+                    <input @bind="editTitle" @bind:event="oninput" class="form-control mb-2" placeholder="To-do title" />
+                    <textarea @bind="editDescription" @bind:event="oninput" class="form-control" rows="3" placeholder="Optional description"></textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-success" @onclick="SaveEdit" disabled="@string.IsNullOrWhiteSpace(editTitle)">Save</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div>
+                    <input type="checkbox" class="form-check-input me-2" checked="@item.IsDone" @onchange="@(() => Toggle(item))" />
+                    <div>
+                        <span class="@GetTitleClass(item)">@item.Title</span>
+                        @if (!string.IsNullOrWhiteSpace(item.Description))
+                        {
+                            <div class="text-muted small mt-1">@item.Description</div>
+                        }
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-warning" @onclick="@(() => StartEdit(item))">Edit</button>
+                    <button class="btn btn-sm btn-danger" @onclick="@(() => Delete(item.Id))">Delete</button>
+                </div>
+            }
         </li>
     }
 </ul>
@@ -33,6 +55,10 @@
 @code {
     private List<TodoItem> todos = new();
     private string newTitle = string.Empty;
+    private string newDescription = string.Empty;
+    private Guid? editingTodoId;
+    private string editTitle = string.Empty;
+    private string editDescription = string.Empty;
     private IJSObjectReference? module;
     private const string storageKey = "blazor_todos_v1";
 
@@ -70,9 +96,49 @@
     {
         var title = newTitle?.Trim();
         if (string.IsNullOrEmpty(title)) return;
-        todos.Insert(0, new TodoItem(Guid.NewGuid(), title, false));
+
+        var description = newDescription?.Trim();
+        todos.Insert(0, new TodoItem(Guid.NewGuid(), title, false, string.IsNullOrWhiteSpace(description) ? null : description));
         newTitle = string.Empty;
+        newDescription = string.Empty;
         await SaveTodosAsync();
+    }
+
+    private void StartEdit(TodoItem item)
+    {
+        editingTodoId = item.Id;
+        editTitle = item.Title;
+        editDescription = item.Description ?? string.Empty;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (editingTodoId is null) return;
+
+        var title = editTitle?.Trim();
+        if (string.IsNullOrEmpty(title)) return;
+
+        var idx = todos.FindIndex(t => t.Id == editingTodoId.Value);
+        if (idx < 0) return;
+
+        var description = editDescription?.Trim();
+        todos[idx] = todos[idx] with
+        {
+            Title = title,
+            Description = string.IsNullOrWhiteSpace(description) ? null : description
+        };
+
+        editingTodoId = null;
+        editTitle = string.Empty;
+        editDescription = string.Empty;
+        await SaveTodosAsync();
+    }
+
+    private void CancelEdit()
+    {
+        editingTodoId = null;
+        editTitle = string.Empty;
+        editDescription = string.Empty;
     }
 
     private async Task Toggle(TodoItem item)
