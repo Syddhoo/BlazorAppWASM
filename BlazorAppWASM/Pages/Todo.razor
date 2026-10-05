@@ -33,10 +33,10 @@
             }
             else
             {
-                <div class="d-flex align-items-start flex-grow-1">
-                    <input type="checkbox" class="form-check-input me-3 mt-2" checked="@item.IsDone" @onchange="@(() => Toggle(item))" />
+                <div>
+                    <input type="checkbox" class="form-check-input me-2" checked="@item.IsDone" @onchange="@(() => Toggle(item))" />
                     <div>
-                        <div class="@GetTitleClass(item)">@item.Title</div>
+                        <span class="@GetTitleClass(item)">@item.Title</span>
                         @if (!string.IsNullOrWhiteSpace(item.Description))
                         {
                             <div class="text-muted small mt-1">@item.Description</div>
